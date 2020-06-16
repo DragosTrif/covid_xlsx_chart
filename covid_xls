@@ -1,0 +1,76 @@
+#!/usr/bin/env perl
+
+use Mojolicious::Lite;
+use Mojo::JSON qw(decode_json);
+use Mojo::UserAgent;
+use Mojo::File;
+
+plugin 'RenderFile';
+
+use DateTime;
+use Readonly;
+use autodie;
+
+use lib 'lib';
+use Mojo::Base 'XlsChart';
+
+Readonly::Hash my %config => (
+  url      => 'http://exfidefortis.net/apps/covid',
+  sheet    => 'covid',
+  chart    => {
+  	xls_name => 'covid.xlsx',
+  	sheet    => 'covid',
+  	y_axis_name => 'date',
+  	x_axis_name => 'no of cases',
+  	title  => 'covid Cluj county',
+  	height => 576,
+  	width  => 720,
+  },
+);
+
+helper mojo_file => sub { Mojo::File->new(); };
+helper date      => sub { DateTime->now()->date(); };
+helper ua        => sub { Mojo::UserAgent->new(); };
+helper xls_chart => sub { XlsChart->new( config => $config{chart} ); };
+
+get '/api/v1/download/covid' => sub {
+  my $c = shift;
+
+  my $new_file = sprintf( "saved_data_%s.json", $c->date() );
+
+  foreach my $file ( _get_old_json_files($new_file) ) {
+    $c->mojo_file()->path($file)->remove();
+  }
+
+  unless ( -e $new_file ) {
+    print "Fetching fresh json data\n";
+
+    my $tx = $c->ua()->get( $config{'url'} );
+
+    unless ( $tx->result->is_success ) {
+      die 'Could not make request';
+    }
+
+    $tx->result->save_to( $new_file );
+  }
+
+  my $data = decode_json( $c->mojo_file()->path($new_file)->slurp() );
+  $c->xls_chart()->make_array_of_arrays( $data )->write_chart();
+  
+  $c->render_file( 'filepath' => $config{chart}->{'xls_name'} );
+};
+
+
+sub _get_old_json_files {
+  my $new_file  = shift;
+  my $mojo_file = shift;
+
+  opendir my $dir, '.';
+  my @old_files = grep { $_ =~ /\.json/ && $_ !~ /$new_file/ } readdir($dir);
+  closedir $dir;
+
+  return @old_files;
+
+}
+
+app->start;
