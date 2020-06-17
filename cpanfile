@@ -1,4 +1,4 @@
-require 'Mojolicious::Lite';
+require 'Mojolicious';
 require 'Mojo::JSON';
 require 'Mojo::UserAgent';
 require 'Mojo::File';
