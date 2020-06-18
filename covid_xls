@@ -19,7 +19,6 @@ Readonly::Hash my %config => (
   sheet    => 'covid',
   chart    => {
   	xls_name => 'covid.xlsx',
-  	sheet    => 'covid',
   	y_axis_name => 'date',
   	x_axis_name => 'no of cases',
   	title  => 'covid Cluj county',
@@ -55,7 +54,11 @@ get '/api/v1/download/covid' => sub {
   }
 
   my $data = decode_json( $c->mojo_file()->path($new_file)->slurp() );
-  $c->xls_chart()->make_array_of_arrays( $data )->write_chart();
+  
+  my $xls_object = $c->xls_chart();  
+  foreach my $data_set_name (keys %{$data} ) {
+  	$xls_object->make_array_of_arrays( $data->{$data_set_name} )->write_chart( $data_set_name );
+  }
   
   $c->render_file( 'filepath' => $config{chart}->{'xls_name'} );
 };

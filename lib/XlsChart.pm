@@ -5,7 +5,7 @@ use Excel::Writer::XLSX;
 
 has config => sub { {} };
 has aoa    => sub { [] };
-
+has xls => sub { Excel::Writer::XLSX->new( 'covid.xlsx' ); };
 
 sub make_array_of_arrays {
   my ( $self, $data ) = @_;
@@ -31,20 +31,19 @@ sub make_array_of_arrays {
 }
 
 sub write_chart {
-  my ( $self ) = @_;
+  my ( $self, $sheet_name ) = @_;
   
   my $data = $self->aoa();
   my $config = $self->config();
 
-  my $workbook  = Excel::Writer::XLSX->new( $config->{'xls_name'} );
-  my $worksheet = $workbook->add_worksheet( $config->{'sheet'} );
-  my $chart     = $workbook->add_chart( type => 'bar', embedded => 1 );
+  my $worksheet = $self->xls()->add_worksheet( $sheet_name );
+  my $chart     = $self->xls()->add_chart( type => 'bar', embedded => 1 );
 
   my $last_index = scalar @{ $data->[0] };
 
   $chart->add_series(
-    categories => '=covid!$E$2:$E$' . $last_index,
-    values     => '=covid!$F$2:$F$' . $last_index,
+    categories => '=' . $sheet_name  . '!$E$2:$E$' . $last_index,
+    values     => '=' . $sheet_name  . '!$F$2:$F$' . $last_index,
   );
 
   $chart->set_title ( name => $config->{name} );
