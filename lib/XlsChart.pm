@@ -46,7 +46,7 @@ sub write_chart {
     values     => '=' . $sheet_name  . '!$F$2:$F$' . $last_index,
   );
 
-  $chart->set_title ( name => $config->{name} );
+  $chart->set_title ( name => $config->{title} );
   $chart->set_x_axis( name => $config->{x_axis_name} );
   $chart->set_y_axis( name => $config->{y_axis_name} );
   $chart->set_size( width  => $config->{width}, height => $config->{height} );
