@@ -5,14 +5,29 @@ use Mojo::JSON qw(decode_json);
 use Mojo::UserAgent;
 use Mojo::File;
 
-plugin 'RenderFile';
-
 use DateTime;
 use Readonly;
 use autodie;
 
 use lib 'lib';
 use Mojo::Base 'XlsChart';
+
+plugin 'RenderFile';
+plugin AssetPack => {pipes => [qw(Vuejs JavaScript Css)]};
+
+app->asset->process(
+  'app.css' => qw(
+    https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css
+    /css/bootstrap.css 
+  ),
+);
+
+app->asset->process(
+  "app.js" => qw(
+    https://cdn.jsdelivr.net/npm/vue/dist/vue.js
+    /js/component.js
+  ),
+);
 
 Readonly::Hash my %config => (
   url      => 'http://exfidefortis.net/apps/covid',
@@ -64,6 +79,17 @@ get '/api/v1/download/covid' => sub {
 };
 
 
+get '/covid/chart' => sub {
+  my $c = shift;
+  $c->render(template => 'index');
+};
+
+post '/covid/chart' => sub {
+  my $c = shift;
+  $c->render( json => { hello => 'bender' });
+};
+
+
 sub _get_old_json_files {
   my $new_file  = shift;
   my $mojo_file = shift;
@@ -77,3 +103,85 @@ sub _get_old_json_files {
 }
 
 app->start;
+
+__DATA__
+@@ /css/bootstrap.css
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+  <title>Bare - Start Bootstrap Template</title>
+
+@@ /js/component.js
+
+var app = new Vue({
+  el: "#app",
+    data: {
+        message1: "Hello, World! ",
+        message2: "Vue"
+    }
+})
+
+@@ index.html.ep
+% layout 'default';
+
+@@ layouts/default.html.ep
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  %= asset "app.css"
+</head>
+
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark static-top">
+    <div class="container">
+      <a class="navbar-brand" href="#">Start Bootstrap</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarResponsive">
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="#">Home
+              <span class="sr-only">(current)</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">About</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Services</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Contact</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page Content -->
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-12 text-center">
+        <h1 class="mt-5">A Bootstrap 4 Starter Template</h1>
+        <p class="lead">Complete with pre-defined file paths and responsive navigation!</p>
+        <div id="app">
+          <p v-html="message1"></p>
+        </div>
+        <ul class="list-unstyled">
+          <li>Bootstrap 4.5.0</li>
+          <li>jQuery 3.5.1</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap core JavaScript -->
+  
+%= asset "app.js"
+</body>
+
+</html>
