@@ -99,7 +99,7 @@ get '/covid/chart' => sub {
 
 post '/covid/chart' => sub {
   my $c = shift;
-  
+
   my $new_file = $c->session()->{file};
 
   my $data = decode_json( $c->mojo_file()->path($new_file)->slurp() );
@@ -111,8 +111,6 @@ post '/covid/chart' => sub {
     $xls_object->make_array_of_arrays( $data->{$data_set_name} );
     $processed_data->{$data_set_name} = $xls_object->aoa();
   }
-
-  warn Dumper( $processed_data );
 
   $c->render( json => $processed_data->{ adjusted_delta_counts_by_date } );
 };
@@ -153,18 +151,33 @@ function _setGraphColor( color, data ) {
 
 var app = new Vue({
   el: "#app",
-  props: ['chartdata', 'options'],
-  mounted() {
-    axios.post('/covid/chart').then( response => this.renderChart( response ) )
+  data() {
+    return {
+      lables :'',
+      data : '',
+      start_date : '',
+      end_date : '',
+    };
+  },
+    mounted() {
+    let self=this;
+    axios.post('/covid/chart').
+    then( 
+      function (response) {
+          self.$set( self, 'lables', response.data[0] );
+          self.$set( self, 'data', response.data[1] );
+        }) 
+            
        
   },
   methods: {
-    renderChart ( data ) {
+
+    renderChart ( labels, data ) {
     
-    let $labels = data.data[0];
-    let $data = data.data[1];
+    let $labels = labels;
+    let $data = data;
     let $backgroundColor = _setGraphColor('rgba(54,73,93,.5)', $data );
-    console.log($backgroundColor);
+
     var ctx = document.getElementById('myChart').getContext('2d');
     var myChart = new Chart(ctx, {
     type: 'line',
@@ -188,6 +201,26 @@ var app = new Vue({
         }
     }
 });
+    },
+    formSubmit (e) {
+      let self = this;
+      e.preventDefault();
+      let a = self.start_date;
+      alert(a);
+      const params = new URLSearchParams();
+      params.append('start_date', self.start_date );
+      params.append('end_date', self.end_date );
+     axios({
+      url: "/covid/chart",
+      method : 'post',
+      data : params
+      }).then( 
+      function (response) {
+          self.$set( self, 'lables', response.data[0] );
+          self.$set( self, 'data', response.data[1] );
+        }).catch(function (error) {
+                    console.log(error);
+                }); 
     }
   },
 })
@@ -203,6 +236,7 @@ var app = new Vue({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   %= asset "app.css"
 
+  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.1/Chart.min.js"></script>
   <script src="https://unpkg.com/vue-chartjs/dist/vue-chartjs.min.js"></script>
 </head>
@@ -233,17 +267,30 @@ var app = new Vue({
 
 
 <!-- First Half -->
+<div id="app">
 <div class="container">
   <div class="row">
     <div class="col-sm-10">
-        <div id="app">
+        
+         <p v-html="renderChart( lables, data )"></p>
           <canvas id="myChart" width="400" height="400"></canvas>
-        </div>
+        
     </div>
     <div class="col-sm-2" style="background-color:pink;">
+
+       <form method="post" @submit="formSubmit">
+          <strong>start date:</strong>
+          <input type="date" id="start_date" name="start_date" v-model="start_date">
+
+          <strong>end date:</strong>
+          <input type="date" id="end_date" name="end_date" v-model="end_date">
+    
+                        <button class="btn btn-success">Submit</button>
+      </form>
       <p>Sed ut perspiciatis...</p>
     </div>
   </div>
+</div>
 </div>
   <!-- Bootstrap core JavaScript -->
 
