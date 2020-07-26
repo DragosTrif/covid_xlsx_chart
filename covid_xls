@@ -153,22 +153,16 @@ var app = new Vue({
   el: "#app",
   data() {
     return {
-      lables :'',
+      labels :'',
       data : '',
       start_date : '',
       end_date : '',
     };
   },
-    mounted() {
-    let self=this;
-    axios.post('/covid/chart').
-    then( 
-      function (response) {
-          self.$set( self, 'lables', response.data[0] );
-          self.$set( self, 'data', response.data[1] );
-        }) 
-            
-       
+  async mounted() {
+    let response = await axios.post('/covid/chart');
+    this.labels = response?.data?.[0];
+    this.data = response?.data?.[1];
   },
   methods: {
 
@@ -202,25 +196,21 @@ var app = new Vue({
     }
 });
     },
-    formSubmit (e) {
-      let self = this;
+    async formSubmit (e) {
       e.preventDefault();
-      let a = self.start_date;
+      let a = this.start_date;
       alert(a);
       const params = new URLSearchParams();
-      params.append('start_date', self.start_date );
-      params.append('end_date', self.end_date );
-     axios({
+      params.append('start_date', this.start_date );
+      params.append('end_date', this.end_date );
+      let response = await axios({
       url: "/covid/chart",
       method : 'post',
       data : params
-      }).then( 
-      function (response) {
-          self.$set( self, 'lables', response.data[0] );
-          self.$set( self, 'data', response.data[1] );
-        }).catch(function (error) {
-                    console.log(error);
-                }); 
+      });
+
+      this.labels = response?.data?.[0];
+      this.data = response?.data?.[1];
     }
   },
 })
@@ -253,7 +243,7 @@ var app = new Vue({
       <div class="collapse navbar-collapse" id="navbarResponsive">
         <ul class="navbar-nav ml-auto">
           <li class="nav-item active">
-            <a class="nav-link" href="http://127.0.0.1:3000/api/v1/download/covid">Covid xls
+            <a class="nav-link" href="/api/v1/download/covid">Covid xls
               <span class="sr-only">(current)</span>
             </a>
           </li>
@@ -272,7 +262,7 @@ var app = new Vue({
   <div class="row">
     <div class="col-sm-10">
         
-         <p v-html="renderChart( lables, data )"></p>
+         <p v-html="renderChart( labels, data )"></p>
           <canvas id="myChart" width="400" height="400"></canvas>
         
     </div>
