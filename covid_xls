@@ -11,122 +11,273 @@ use autodie;
 
 use lib 'lib';
 use Mojo::Base 'XlsChart';
-use  Data::Dumper;
+use Schema;
+
+use Data::Dumper;
+
 plugin 'RenderFile';
-plugin AssetPack => {pipes => [qw(Vuejs JavaScript Css)]};
+plugin AssetPack => { pipes => [qw(Vuejs JavaScript Css)] };
 plugin 'TagHelpers';
+
+plugin Minion => { #mysql => 'mysql://dtrif:1t1r1i1f@127.0.0.1/minion_jobs', 
+  SQLite => 'sqlite:minion.db',
+};
+
+
+plugin 'Minion::Admin', {
+    # Host Admin UI at /
+    route => app->routes->any('/'),
+};
+
+Readonly::Hash my %config => (
+  url   => 'http://exfidefortis.net/apps/covid?county=%s',
+  sheet => 'covid',
+  chart => {
+    xls_name    => 'covid.xlsx',
+    y_axis_name => 'date',
+    x_axis_name => 'no of cases',
+    title       => 'covid Cluj county',
+    height      => 576,
+    width       => 720,
+  },
+);
+
+
+# app->minion->add_task( 
+#   get_new_data => sub {
+#     my ( $self, $current_data, $county ) = @_;
+
+#    unless ( $current_data->{record_date} ) {
+#     print "Fetching fresh json data\n";
+#     my $county_id_rs =
+#       $self->schema->resultset('County')->search( { abbreviation => uc $county } );
+    
+#     my $county_id;
+#     my $county_name;
+
+#     while ( my $result = $county_id_rs->next() ) {
+#       $county_id   = $result->get_column('id');
+#       $county_name = $result->get_column('name');
+#     }
+
+#     my $tx = $self->ua()->get( sprintf( $config{'url'}, $county_name ) );
+
+#     unless ( $tx->result->is_success ) {
+#       die 'Could not make request';
+#     }
+#     my $res = decode_json( $tx->result()->body() );
+
+#     my $data_set = $res->{adjusted_delta_counts_by_date};
+#     foreach my $date ( sort { $a cmp $b } keys %{$data_set} ) {
+#       $self->schema()->resultset('Case')->update_or_create(
+#         {
+#           county_id   => $county_id,
+#           cases       => $data_set->{$date},
+#           record_date => $date,
+#         },
+#       );
+#     }
+#   }
+
+  #$self->app->log->debug(qq{Received message "$county"});
+  #},
+#);
+
+my $app_config = plugin 'Config' => { file => 'myapp.conf' };
 
 app->asset->process(
   'app.css' => qw(
     https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css
-    /css/bootstrap.css 
-  ),
+    /css/bootstrap.css
+    ),
 );
 
 app->asset->process(
   "app.js" => qw(
     https://cdn.jsdelivr.net/npm/vue/dist/vue.js
     /js/component.js
-  ),
+    ),
 );
 
 app->asset->process(
   "axios.js" => qw(
     https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.2/axios.js
-  ),
-);
-
-Readonly::Hash my %config => (
-  url      => 'http://exfidefortis.net/apps/covid',
-  sheet    => 'covid',
-  chart    => {
-  	xls_name => 'covid.xlsx',
-  	y_axis_name => 'date',
-  	x_axis_name => 'no of cases',
-  	title  => 'covid Cluj county',
-  	height => 576,
-  	width  => 720,
-  },
+    ),
 );
 
 helper mojo_file => sub { Mojo::File->new(); };
 helper date      => sub { DateTime->now()->date(); };
 helper ua        => sub { Mojo::UserAgent->new(); };
 helper xls_chart => sub { XlsChart->new( config => $config{chart} ); };
+helper schema    => sub {
+  Schema->connect(
+    $app_config->{db}->{dns},
+    $app_config->{db}->{user},
+    $app_config->{db}->{password},
+    { RaiseError => 1, PrintError => 0, AutoCommit => 1 }
+  );
+};
+
+helper fetch_curent_day_data => sub {
+  my ( $self, $date,  $county ) = @_;
+
+  my $result_set = $self->schema()->resultset('County')->search(
+    { 'cases.record_date' => $date, abbreviation => uc $county },
+    {
+      join      => 'cases',
+      '+select' => ['cases.record_date'],
+      '+as'     => ['record_date']
+    }
+  );
+
+  my $row = {};
+  while ( my $result = $result_set->next() ) {
+    $row->{county_id}   = $result->get_column('id');
+    $row->{record_date} = $result->get_column('record_date');
+
+  }
+
+  return $row;
+};
+
+
+helper get_new_data => sub {
+  my ( $self, $current_data, $county ) = @_;
+
+   unless ( $current_data->{record_date} ) {
+    print "Fetching fresh json data\n";
+    my $county_id_rs =
+      $self->schema->resultset('County')->search( { abbreviation => uc $county } );
+    
+    my $county_id;
+    my $county_name;
+
+    while ( my $result = $county_id_rs->next() ) {
+      $county_id   = $result->get_column('id');
+      $county_name = $result->get_column('name');
+    }
+
+    my $tx = $self->ua()->get( sprintf( $config{'url'}, $county_name ) );
+
+    unless ( $tx->result->is_success ) {
+      die 'Could not make request';
+    }
+    my $res = decode_json( $tx->result()->body() );
+
+    my $data_set = $res->{adjusted_delta_counts_by_date};
+    foreach my $date ( sort { $a cmp $b } keys %{$data_set} ) {
+      $self->schema()->resultset('Case')->update_or_create(
+        {
+          county_id   => $county_id,
+          cases       => $data_set->{$date},
+          record_date => $date,
+        },
+      );
+    }
+  }
+};
+
+
+app->minion->add_task( new_data => sub { shift->app->get_new_data(@_) });
+
+helper new_data => sub { shift->minion->enqueue( new_data => [@_] ) };
 
 get '/api/v1/download/covid' => sub {
   my $c = shift;
 
   my $new_file = $c->session->{file};
-  
+
   my $data = decode_json( $c->mojo_file()->path($new_file)->slurp() );
-  
-  my $xls_object = $c->xls_chart();  
-  
-  foreach my $data_set_name (keys %{$data} ) {
-  	$xls_object->make_array_of_arrays( $data->{$data_set_name} )->write_chart( $data_set_name );
+
+  my $xls_object = $c->xls_chart();
+
+  foreach my $data_set_name ( keys %{$data} ) {
+    $xls_object->make_array_of_arrays( $data->{$data_set_name} )
+      ->write_chart($data_set_name);
   }
-  
+
   $c->render_file( 'filepath' => $config{chart}->{'xls_name'} );
 };
 
-
-get '/covid/chart' => sub {
+get '/covid/chart/:county' => sub {
   my $c = shift;
 
-  my $new_file = sprintf( "saved_data_%s.json", $c->date() );
-  
-  $c->session( file => $new_file );
-  
-  foreach my $file ( _get_old_json_files($new_file) ) {
-    $c->mojo_file()->path($file)->remove();
-  }
+  $c->render( template => 'index' );
+};
 
-  unless ( -e $new_file ) {
-    print "Fetching fresh json data\n";
+post '/covid/chart/:county' => sub {
+  my $c = shift;
 
-    my $tx = $c->ua()->get( $config{'url'} );
+  my $county = $c->stash('county');
+  my $date   = $c->date();
+  my $row = $c->fetch_curent_day_data( $date, $county );
+  $c->new_data( $row,  $county );
 
-    unless ( $tx->result->is_success ) {
-      die 'Could not make request';
+  my $start_date = $c->param('start_date') // '';
+  my $end_date   = $c->param('end_date')   // '';
+
+  my $county_id;
+  if ($county) {
+    my $county_rs =
+      $c->schema->resultset('County')->search( { abbreviation => uc $county } );
+    while ( my $result = $county_rs->next() ) {
+      $county_id = $result->get_column('id');
     }
-
-    $tx->result->save_to( $new_file );
   }
 
-  $c->render(template => 'index');
-};
+  if ( !$start_date && !$end_date ) {
+    my $min_max_rs = $c->schema()->resultset('Case')->search(
+      { county_id => $county_id },
+      {
+        columns => [
+          { min_date => { min => "record_date" } },
+          { max_date => { max => "record_date" } },
+        ]
+      }
+    );
 
-post '/covid/chart' => sub {
-  my $c = shift;
+    while ( my $result = $min_max_rs->next() ) {
+      $end_date   = $result->get_column('max_date');
+      $start_date = $result->get_column('min_date');
+    }
+  }
 
-  my $new_file = $c->session()->{file};
+  my @data = $c->schema()->resultset('Case')->search(
+    {
+      county_id   => $county_id,
+      record_date => { '-between' => [ $start_date, $end_date ] }
+    }
+  );
+  @data =
+    map { { date => $_->record_date->date(), cases => $_->cases, } } @data;
 
-  my $data = decode_json( $c->mojo_file()->path($new_file)->slurp() );
-  
   my $processed_data = {};
-  
-  my $xls_object = $c->xls_chart();
-  foreach my $data_set_name (keys %{$data} ) {
-    $xls_object->make_array_of_arrays( $data->{$data_set_name} );
-    $processed_data->{$data_set_name} = $xls_object->aoa();
+  my $categories     = [];
+  my $values         = [];
+
+  foreach my $row (@data) {
+    push @{$categories}, $row->{date};
+    push @{$values},     $row->{cases};
+    $processed_data->{adjusted_delta_counts_by_date} = [ $categories, $values ];
   }
 
-  $c->render( json => $processed_data->{ adjusted_delta_counts_by_date } );
+  my $active_counties_rs =
+    $c->schema->resultset('County')->search( { status => 1 } );
+
+  my $counties_dropdown = [];
+  while ( my $result = $active_counties_rs->next() ) {
+    push @{$counties_dropdown},
+      {
+      name         => $result->get_column('name'),
+      abbreviation => $result->get_column('abbreviation')
+      };
+  }
+
+  push @{ $processed_data->{adjusted_delta_counts_by_date} },
+    $counties_dropdown;
+
+  $c->render( json => $processed_data->{adjusted_delta_counts_by_date} );
 };
-
-
-sub _get_old_json_files {
-  my $new_file  = shift;
-  my $mojo_file = shift;
-
-  opendir my $dir, '.';
-  my @old_files = grep { $_ =~ /\.json/ && $_ !~ /$new_file/ } readdir($dir);
-  closedir $dir;
-
-  return @old_files;
-
-}
 
 app->start;
 
@@ -136,7 +287,7 @@ __DATA__
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <meta name="description" content="">
   <meta name="author" content="">
-  <title>Bare - Start Bootstrap Template</title>
+  <title>Bare - Start Bootstrap Template123</title>
 
 @@ /js/component.js
 
@@ -157,21 +308,28 @@ var app = new Vue({
       data : '',
       start_date : '',
       end_date : '',
+      county: '',
+      selected:'',
+      options:'',
     };
   },
+
   async mounted() {
-    let response = await axios.post('/covid/chart');
+    let county = document.getElementById('myCounty').innerHTML;
+    county = county.toUpperCase();
+    let response = await axios.post(`/covid/chart/${county}`);
     this.labels = response?.data?.[0];
     this.data = response?.data?.[1];
+    this.options = response?.data?.[2];
+    this.selected = county;
+    console.log(this.options);
   },
   methods: {
 
     renderChart ( labels, data ) {
-    
     let $labels = labels;
     let $data = data;
     let $backgroundColor = _setGraphColor('rgba(54,73,93,.5)', $data );
-
     var ctx = document.getElementById('myChart').getContext('2d');
     var myChart = new Chart(ctx, {
     type: 'line',
@@ -199,19 +357,21 @@ var app = new Vue({
     async formSubmit (e) {
       e.preventDefault();
       let a = this.start_date;
-      alert(a);
+      let county = this.selected;
       const params = new URLSearchParams();
       params.append('start_date', this.start_date );
       params.append('end_date', this.end_date );
       let response = await axios({
-      url: "/covid/chart",
+      url: "/covid/chart/" + county,
       method : 'post',
       data : params
       });
 
       this.labels = response?.data?.[0];
       this.data = response?.data?.[1];
-    }
+      this.options = response?.data?.[2];
+      this.selected = county;
+    },
   },
 })
 
@@ -227,6 +387,7 @@ var app = new Vue({
   %= asset "app.css"
 
   
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.1/Chart.min.js"></script>
   <script src="https://unpkg.com/vue-chartjs/dist/vue-chartjs.min.js"></script>
 </head>
@@ -236,7 +397,7 @@ var app = new Vue({
   <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark static-top">
     <div class="container">
-      <a class="navbar-brand" href="#">Start Bootstrap</a>
+      <a class="navbar-brand" href="#">Covid Cases</a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -261,7 +422,6 @@ var app = new Vue({
 <div class="container">
   <div class="row">
     <div class="col-sm-10">
-        
          <p v-html="renderChart( labels, data )"></p>
           <canvas id="myChart" width="400" height="400"></canvas>
         
@@ -274,14 +434,21 @@ var app = new Vue({
 
           <strong>end date:</strong>
           <input type="date" id="end_date" name="end_date" v-model="end_date">
-    
-                        <button class="btn btn-success">Submit</button>
+          <br>
+          <strong> Select county</strong>
+          <select class="form-control" v-model="selected">
+            <option v-for="option in options" v-bind:value="option.abbreviation">
+            {{ option.name }}
+            </option>
+          </select> 
+          <br>
+          <button class="btn btn-success">Submit</button>
       </form>
-      <p>Sed ut perspiciatis...</p>
     </div>
   </div>
 </div>
 </div>
+<p id='myCounty' class="invisible"><%= $county %></p>
   <!-- Bootstrap core JavaScript -->
 
 %= asset 'axios.js'
