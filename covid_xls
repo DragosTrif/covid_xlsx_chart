@@ -19,14 +19,14 @@ plugin 'RenderFile';
 plugin AssetPack => { pipes => [qw(Vuejs JavaScript Css)] };
 plugin 'TagHelpers';
 
-plugin Minion => { #mysql => 'mysql://dtrif:1t1r1i1f@127.0.0.1/minion_jobs', 
+plugin Minion => {    #mysql => 'mysql://dtrif:1t1r1i1f@127.0.0.1/minion_jobs',
   SQLite => 'sqlite:minion.db',
 };
 
-
 plugin 'Minion::Admin', {
-    # Host Admin UI at /
-    route => app->routes->any('/'),
+
+  # Host Admin UI at /
+  route => app->routes->any('/'),
 };
 
 Readonly::Hash my %config => (
@@ -41,47 +41,6 @@ Readonly::Hash my %config => (
     width       => 720,
   },
 );
-
-
-# app->minion->add_task( 
-#   get_new_data => sub {
-#     my ( $self, $current_data, $county ) = @_;
-
-#    unless ( $current_data->{record_date} ) {
-#     print "Fetching fresh json data\n";
-#     my $county_id_rs =
-#       $self->schema->resultset('County')->search( { abbreviation => uc $county } );
-    
-#     my $county_id;
-#     my $county_name;
-
-#     while ( my $result = $county_id_rs->next() ) {
-#       $county_id   = $result->get_column('id');
-#       $county_name = $result->get_column('name');
-#     }
-
-#     my $tx = $self->ua()->get( sprintf( $config{'url'}, $county_name ) );
-
-#     unless ( $tx->result->is_success ) {
-#       die 'Could not make request';
-#     }
-#     my $res = decode_json( $tx->result()->body() );
-
-#     my $data_set = $res->{adjusted_delta_counts_by_date};
-#     foreach my $date ( sort { $a cmp $b } keys %{$data_set} ) {
-#       $self->schema()->resultset('Case')->update_or_create(
-#         {
-#           county_id   => $county_id,
-#           cases       => $data_set->{$date},
-#           record_date => $date,
-#         },
-#       );
-#     }
-#   }
-
-  #$self->app->log->debug(qq{Received message "$county"});
-  #},
-#);
 
 my $app_config = plugin 'Config' => { file => 'myapp.conf' };
 
@@ -119,7 +78,7 @@ helper schema    => sub {
 };
 
 helper fetch_curent_day_data => sub {
-  my ( $self, $date,  $county ) = @_;
+  my ( $self, $date, $county ) = @_;
 
   my $result_set = $self->schema()->resultset('County')->search(
     { 'cases.record_date' => $date, abbreviation => uc $county },
@@ -140,15 +99,15 @@ helper fetch_curent_day_data => sub {
   return $row;
 };
 
-
 helper get_new_data => sub {
   my ( $self, $current_data, $county ) = @_;
 
-   unless ( $current_data->{record_date} ) {
+  unless ( $current_data->{record_date} ) {
     print "Fetching fresh json data\n";
     my $county_id_rs =
-      $self->schema->resultset('County')->search( { abbreviation => uc $county } );
-    
+      $self->schema->resultset('County')
+      ->search( { abbreviation => uc $county } );
+
     my $county_id;
     my $county_name;
 
@@ -177,9 +136,7 @@ helper get_new_data => sub {
   }
 };
 
-
-app->minion->add_task( new_data => sub { shift->app->get_new_data(@_) });
-
+app->minion->add_task( new_data => sub { shift->app->get_new_data(@_) } );
 helper new_data => sub { shift->minion->enqueue( new_data => [@_] ) };
 
 get '/api/v1/download/covid' => sub {
@@ -210,8 +167,8 @@ post '/covid/chart/:county' => sub {
 
   my $county = $c->stash('county');
   my $date   = $c->date();
-  my $row = $c->fetch_curent_day_data( $date, $county );
-  $c->new_data( $row,  $county );
+  my $row    = $c->fetch_curent_day_data( $date, $county );
+  $c->new_data( $row, $county );
 
   my $start_date = $c->param('start_date') // '';
   my $end_date   = $c->param('end_date')   // '';
