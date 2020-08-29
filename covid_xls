@@ -19,7 +19,7 @@ plugin 'RenderFile';
 plugin AssetPack => { pipes => [qw(Vuejs JavaScript Css)] };
 plugin 'TagHelpers';
 
-plugin Minion => {    #mysql => 'mysql://dtrif:1t1r1i1f@127.0.0.1/minion_jobs',
+plugin Minion => {
   SQLite => 'sqlite:minion.db',
 };
 
@@ -136,7 +136,12 @@ helper get_new_data => sub {
   }
 };
 
-app->minion->add_task( new_data => sub { shift->app->get_new_data(@_) } );
+app->minion->add_task( new_data => sub { 
+  my $minion = shift;
+  return $minion->finish('Previous job is still active')
+    unless my $guard = $minion->guard('fragile_backend_service', 7200);
+  $minion->app->get_new_data(@_); 
+} );
 helper new_data => sub { shift->minion->enqueue( new_data => [@_] ) };
 
 get '/api/v1/download/covid' => sub {
@@ -279,7 +284,6 @@ var app = new Vue({
     this.data = response?.data?.[1];
     this.options = response?.data?.[2];
     this.selected = county;
-    console.log(this.options);
   },
   methods: {
 
