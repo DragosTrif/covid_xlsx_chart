@@ -24,8 +24,6 @@ plugin Minion => {
 };
 
 plugin 'Minion::Admin', {
-
-  # Host Admin UI at /
   route => app->routes->any('/'),
 };
 
@@ -144,19 +142,13 @@ app->minion->add_task( new_data => sub {
 } );
 helper new_data => sub { shift->minion->enqueue( new_data => [@_] ) };
 
-get '/api/v1/download/covid' => sub {
+get '/api/v1/download/covid/:county' => sub {
   my $c = shift;
 
-  my $new_file = $c->session->{file};
-
-  my $data = decode_json( $c->mojo_file()->path($new_file)->slurp() );
-
   my $xls_object = $c->xls_chart();
-
-  foreach my $data_set_name ( keys %{$data} ) {
-    $xls_object->make_array_of_arrays( $data->{$data_set_name} )
-      ->write_chart($data_set_name);
-  }
+  $xls_object->aoa( $c->session( 'xls_data') );
+  my $chart_name = "cases_in_" . $c->stash('county');
+  $xls_object->write_chart( $chart_name );
 
   $c->render_file( 'filepath' => $config{chart}->{'xls_name'} );
 };
@@ -235,6 +227,10 @@ post '/covid/chart/:county' => sub {
       };
   }
 
+  my @xls_data = @{ $processed_data->{adjusted_delta_counts_by_date} };
+  
+  $c->session( xls_data  => \@xls_data );
+  
   push @{ $processed_data->{adjusted_delta_counts_by_date} },
     $counties_dropdown;
 
@@ -365,7 +361,7 @@ var app = new Vue({
       <div class="collapse navbar-collapse" id="navbarResponsive">
         <ul class="navbar-nav ml-auto">
           <li class="nav-item active">
-            <a class="nav-link" href="/api/v1/download/covid">Covid xls
+            <a class="nav-link" href="/api/v1/download/covid/<%=$county%>">Covid xls
               <span class="sr-only">(current)</span>
             </a>
           </li>
