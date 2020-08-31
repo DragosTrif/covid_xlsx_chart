@@ -136,8 +136,8 @@ helper get_new_data => sub {
 
 app->minion->add_task( new_data => sub { 
   my $minion = shift;
-  return $minion->finish('Previous job is still active')
-    unless my $guard = $minion->guard('fragile_backend_service', 7200);
+  #return $minion->finish('Previous job is still active')
+    #unless my $guard = $minion->guard('fragile_backend_service', 7200);
   $minion->app->get_new_data(@_); 
 } );
 helper new_data => sub { shift->minion->enqueue( new_data => [@_] ) };
@@ -257,6 +257,7 @@ function _setGraphColor( color, data ) {
 
     return $colors;
 };
+var myChart;
 
 var app = new Vue({
   el: "#app",
@@ -288,7 +289,12 @@ var app = new Vue({
     let $data = data;
     let $backgroundColor = _setGraphColor('rgba(54,73,93,.5)', $data );
     var ctx = document.getElementById('myChart').getContext('2d');
-    var myChart = new Chart(ctx, {
+
+    if ( myChart ) {
+      myChart.destroy();
+    }
+    
+    myChart = new Chart(ctx, {
     type: 'line',
     data: {
         labels: $labels,
