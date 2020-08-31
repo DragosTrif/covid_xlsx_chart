@@ -19,13 +19,9 @@ plugin 'RenderFile';
 plugin AssetPack => { pipes => [qw(Vuejs JavaScript Css)] };
 plugin 'TagHelpers';
 
-plugin Minion => {
-  SQLite => 'sqlite:minion.db',
-};
+plugin Minion => { SQLite => 'sqlite:minion.db', };
 
-plugin 'Minion::Admin', {
-  route => app->routes->any('/'),
-};
+plugin 'Minion::Admin', { route => app->routes->any('/'), };
 
 Readonly::Hash my %config => (
   url   => 'http://exfidefortis.net/apps/covid?county=%s',
@@ -134,21 +130,22 @@ helper get_new_data => sub {
   }
 };
 
-app->minion->add_task( new_data => sub { 
-  my $minion = shift;
-  #return $minion->finish('Previous job is still active')
-    #unless my $guard = $minion->guard('fragile_backend_service', 7200);
-  $minion->app->get_new_data(@_); 
-} );
+app->minion->add_task(
+  new_data => sub {
+    my $minion = shift;
+
+    $minion->app->get_new_data(@_);
+  }
+);
 helper new_data => sub { shift->minion->enqueue( new_data => [@_] ) };
 
 get '/api/v1/download/covid/:county' => sub {
   my $c = shift;
 
   my $xls_object = $c->xls_chart();
-  $xls_object->aoa( $c->session( 'xls_data') );
+  $xls_object->aoa( $c->session('xls_data') );
   my $chart_name = "cases_in_" . $c->stash('county');
-  $xls_object->write_chart( $chart_name );
+  $xls_object->write_chart($chart_name);
 
   $c->render_file( 'filepath' => $config{chart}->{'xls_name'} );
 };
@@ -196,43 +193,48 @@ post '/covid/chart/:county' => sub {
     }
   }
 
-  my @data = $c->schema()->resultset('Case')->search(
-    {
-      county_id   => $county_id,
-      record_date => { '-between' => [ $start_date, $end_date ] }
-    }
-  );
-  @data =
-    map { { date => $_->record_date->date(), cases => $_->cases, } } @data;
-
+  my @data           = ();
   my $processed_data = {};
-  my $categories     = [];
-  my $values         = [];
-
-  foreach my $row (@data) {
-    push @{$categories}, $row->{date};
-    push @{$values},     $row->{cases};
-    $processed_data->{adjusted_delta_counts_by_date} = [ $categories, $values ];
-  }
-
-  my $active_counties_rs =
-    $c->schema->resultset('County')->search( { status => 1 } );
-
-  my $counties_dropdown = [];
-  while ( my $result = $active_counties_rs->next() ) {
-    push @{$counties_dropdown},
+  
+  if ( $start_date && $end_date ) {
+    @data = $c->schema()->resultset('Case')->search(
       {
-      name         => $result->get_column('name'),
-      abbreviation => $result->get_column('abbreviation')
-      };
-  }
+        county_id   => $county_id,
+        record_date => { '-between' => [ $start_date, $end_date ] }
+      }
+    );
+    @data =
+      map { { date => $_->record_date->date(), cases => $_->cases, } } @data;
 
-  my @xls_data = @{ $processed_data->{adjusted_delta_counts_by_date} };
-  
-  $c->session( xls_data  => \@xls_data );
-  
-  push @{ $processed_data->{adjusted_delta_counts_by_date} },
-    $counties_dropdown;
+    my $categories = [];
+    my $values     = [];
+
+    foreach my $row (@data) {
+      push @{$categories}, $row->{date};
+      push @{$values},     $row->{cases};
+      $processed_data->{adjusted_delta_counts_by_date} =
+        [ $categories, $values ];
+    }
+
+    my $active_counties_rs =
+      $c->schema->resultset('County')->search( { status => 1 } );
+
+    my $counties_dropdown = [];
+    while ( my $result = $active_counties_rs->next() ) {
+      push @{$counties_dropdown},
+        {
+        name         => $result->get_column('name'),
+        abbreviation => $result->get_column('abbreviation')
+        };
+    }
+
+    my @xls_data = @{ $processed_data->{adjusted_delta_counts_by_date} };
+
+    $c->session( xls_data => \@xls_data );
+
+    push @{ $processed_data->{adjusted_delta_counts_by_date} },
+      $counties_dropdown;
+  }
 
   $c->render( json => $processed_data->{adjusted_delta_counts_by_date} );
 };
@@ -386,9 +388,14 @@ var app = new Vue({
   <div class="row">
     <div class="col-sm-10">
          <p v-html="renderChart( labels, data )"></p>
-          <canvas id="myChart" width="400" height="400"></canvas>
-        
+          <canvas id="myChart" width="400" height="400"></canvas> 
+
+      <div class="alert alert-info">
+        <strong>Info!</strong> We are trying to fetch the newest data for you. 
+        Please refresh the page after a few seconds.
     </div>
+    </div>
+    
     <div class="col-sm-2" style="background-color:pink;">
 
        <form method="post" @submit="formSubmit">
@@ -405,7 +412,7 @@ var app = new Vue({
             </option>
           </select> 
           <br>
-          <button class="btn btn-success">Submit</button>
+          <button class="btn btn-success">Search</button>
       </form>
     </div>
   </div>
