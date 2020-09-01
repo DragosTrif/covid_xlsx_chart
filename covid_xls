@@ -7,11 +7,14 @@ use Mojo::File;
 
 use DateTime;
 use Readonly;
+use Encode qw(decode encode);
+use URI::Escape;
 use autodie;
 
 use lib 'lib';
 use Mojo::Base 'XlsChart';
 use Schema;
+
 
 use Data::Dumper;
 
@@ -110,7 +113,7 @@ helper get_new_data => sub {
       $county_name = $result->get_column('name');
     }
 
-    my $tx = $self->ua()->get( sprintf( $config{'url'}, $county_name ) );
+    my $tx = $self->ua()->get( sprintf( $config{'url'}, uri_escape( $county_name ) ) );
 
     unless ( $tx->result->is_success ) {
       die 'Could not make request';
@@ -163,7 +166,7 @@ post '/covid/chart/:county' => sub {
   my $date   = $c->date();
   my $row    = $c->fetch_curent_day_data( $date, $county );
   $c->new_data( $row, $county );
-
+  #$c->get_new_data($row, $county);
   my $start_date = $c->param('start_date') // '';
   my $end_date   = $c->param('end_date')   // '';
 
@@ -223,7 +226,7 @@ post '/covid/chart/:county' => sub {
     while ( my $result = $active_counties_rs->next() ) {
       push @{$counties_dropdown},
         {
-        name         => $result->get_column('name'),
+        name         => decode('utf8', $result->get_column('name') ),
         abbreviation => $result->get_column('abbreviation')
         };
     }
