@@ -3,6 +3,7 @@
 use Mojolicious::Lite;
 use Mojo::JSON qw(decode_json);
 use Mojo::UserAgent;
+use Mojo::URL;
 use Mojo::File;
 
 use DateTime;
@@ -70,7 +71,7 @@ helper schema    => sub {
     $app_config->{db}->{dns},
     $app_config->{db}->{user},
     $app_config->{db}->{password},
-    { RaiseError => 1, PrintError => 0, AutoCommit => 1 }
+    { RaiseError => 1, PrintError => 0, AutoCommit => 1, mysql_enable_utf8 => 1 }
   );
 };
 
@@ -113,7 +114,13 @@ helper get_new_data => sub {
       $county_name = $result->get_column('name');
     }
 
-    my $tx = $self->ua()->get( sprintf( $config{'url'}, uri_escape( $county_name ) ) );
+    my $url = Mojo::URL->new;
+    $url->scheme('http');
+    $url->path('/apps/covid');
+    $url->host('exfidefortis.net');
+    $url->query( county => $county_name );
+
+    my $tx = $self->ua()->get( $url->to_string );
 
     unless ( $tx->result->is_success ) {
       die 'Could not make request';
