@@ -233,7 +233,7 @@ post '/covid/chart/:county' => sub {
     while ( my $result = $active_counties_rs->next() ) {
       push @{$counties_dropdown},
         {
-        name         => decode('utf8', $result->get_column('name') ),
+        name         => $result->get_column('name'),
         abbreviation => $result->get_column('abbreviation')
         };
     }
