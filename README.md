@@ -1,4 +1,4 @@
-# Small Perl Mojolicious app that reports  Covid-19 cases in Romania by county.
+# Perl Mojolicious lite app that reports  Covid-19 cases in Romania by county.
 
 ## Backend:
 * Perl
@@ -11,6 +11,7 @@
 ## Frontend:
 * Vue.js
 * Bootstrap
+* axios
 
 ## deployment on digitalocean:
 [Covid](http://trifdragos.eu/covid/chart/cj)
