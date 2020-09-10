@@ -1,5 +1,5 @@
 ## Perl Mojolicious lite app that reports  Covid-19 cases in Romania by county.
-
+*You can filter the data and download it in xlsx format*
 ### Backend:
 * Perl
 * Mojolicious::Lite
