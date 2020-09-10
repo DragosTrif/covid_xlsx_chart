@@ -5,7 +5,7 @@
 * Mojolicious::Lite
 * Dbix::Class
 * Minion
-* Mojo::AssetPack
+* Mojolicious::Plugin::AssetPack
 * MySql
 
 ### Frontend:
