@@ -25,7 +25,15 @@ plugin 'TagHelpers';
 
 plugin Minion => { SQLite => 'sqlite:minion.db', };
 
-plugin 'Minion::Admin', { route => app->routes->any('/'), };
+my $under = app->routes->under('/minion' =>sub {
+  my $c = shift;
+  return 1 if $c->req->url->to_abs->userinfo eq 'Bender:rocks';
+  $c->res->headers->www_authenticate('Basic');
+  $c->render(text => 'Authentication required!', status => 401);
+  return undef;
+});
+
+plugin 'Minion::Admin', { route => $under };
 
 Readonly::Hash my %config => (
   url   => 'http://exfidefortis.net/apps/covid?county=%s',
