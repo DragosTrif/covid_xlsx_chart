@@ -42,7 +42,7 @@ Readonly::Hash my %config => (
     xls_name    => 'covid.xlsx',
     y_axis_name => 'date',
     x_axis_name => 'no of cases',
-    title       => 'covid Cluj county',
+    title       => 'covid cases',
     height      => 576,
     width       => 720,
   },
@@ -162,7 +162,7 @@ get '/api/v1/download/covid/:county' => sub {
 
   my $xls_object = $c->xls_chart();
   $xls_object->aoa( $c->session('xls_data') );
-  my $chart_name = "cases_in_" . $c->stash('county');
+  my $chart_name = "cases_in_" . $c->session( 'county_abbreviation' );
   $xls_object->write_chart($chart_name);
 
   $c->render_file( 'filepath' => $config{chart}->{'xls_name'} );
@@ -248,7 +248,7 @@ post '/covid/chart/:county' => sub {
 
     my @xls_data = @{ $processed_data->{adjusted_delta_counts_by_date} };
 
-    $c->session( xls_data => \@xls_data );
+    $c->session( xls_data => \@xls_data, county_abbreviation => $county );
 
     push @{ $processed_data->{adjusted_delta_counts_by_date} },
       $counties_dropdown;
@@ -418,9 +418,11 @@ var app = new Vue({
 
        <form method="post" @submit="formSubmit">
           <strong>start date:</strong>
+          <br>
           <input type="date" id="start_date" name="start_date" v-model="start_date">
-
+          <br>
           <strong>end date:</strong>
+          <br>
           <input type="date" id="end_date" name="end_date" v-model="end_date">
           <br>
           <strong> Select county</strong>
